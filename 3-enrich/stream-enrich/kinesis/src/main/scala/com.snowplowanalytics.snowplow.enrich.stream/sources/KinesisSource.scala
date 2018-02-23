@@ -38,6 +38,7 @@ import org.apache.thrift.TDeserializer
 import scalaz._
 import Scalaz._
 
+import utils.emitPii
 import common.enrichments.EnrichmentRegistry
 import iglu.client.Resolver
 import model.{Kinesis, StreamsConfig}
@@ -59,23 +60,37 @@ object KinesisSource {
     goodSink <-
       KinesisSink.createAndInitialize(kinesisConfig, config.buffer, config.out.enriched, tracker)
         .validation
-    threadLocalGoodSink = new ThreadLocal[Sink] {
-      override def initialValue = goodSink
-    }
-    badSink <-
-      KinesisSink.createAndInitialize(kinesisConfig, config.buffer, config.out.bad, tracker)
+      threadLocalGoodSink = new ThreadLocal[Sink] {
+        override def initialValue = goodSink
+      }
+      piiSink <- if (emitPii(enrichmentRegistry))
+        KinesisSink
+          .createAndInitialize(kinesisConfig, config.buffer, config.out.enriched, tracker)
+          .validation
+      else
+        None.success
+      threadLocalPiiSink = piiSink match {
+        case k: KinesisSink =>
+          Some(new ThreadLocal[Sink] {
+            override def initialValue = k
+          })
+        case _ => None
+      }
+      badSink <- KinesisSink
+        .createAndInitialize(kinesisConfig, config.buffer, config.out.bad, tracker)
         .validation
     threadLocalBadSink = new ThreadLocal[Sink] {
       override def initialValue = badSink
     }
     provider <- KinesisEnrich.getProvider(kinesisConfig.aws).validation
-  } yield new KinesisSource(threadLocalGoodSink, threadLocalBadSink,
+  } yield new KinesisSource(threadLocalGoodSink, threadLocalPiiSink, threadLocalBadSink,
     igluResolver, enrichmentRegistry, tracker, config, kinesisConfig, provider)
 }
 
 /** Source to read events from a Kinesis stream */
 class KinesisSource private (
   goodSink: ThreadLocal[Sink],
+  piiSink: Option[ThreadLocal[Sink]],
   badSink: ThreadLocal[Sink],
   igluResolver: Resolver,
   enrichmentRegistry: EnrichmentRegistry,
@@ -83,7 +98,7 @@ class KinesisSource private (
   config: StreamsConfig,
   kinesisConfig: Kinesis,
   provider: AWSCredentialsProvider
-) extends Source(goodSink, badSink, igluResolver, enrichmentRegistry, tracker, config.out.partitionKey) {
+) extends Source(goodSink, piiSink, badSink, igluResolver, enrichmentRegistry, tracker, config.out.partitionKey) {
 
   override val MaxRecordSize = Some(1000000L)
 

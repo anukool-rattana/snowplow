@@ -31,6 +31,7 @@ import scalaz._
 import Scalaz._
 
 import common.enrichments.EnrichmentRegistry
+import utils.emitPii
 import iglu.client.Resolver
 import model.{Kafka, StreamsConfig}
 import scalatracker.Tracker
@@ -43,24 +44,41 @@ object KafkaSource {
     igluResolver: Resolver,
     enrichmentRegistry: EnrichmentRegistry,
     tracker: Option[Tracker]
-  ): Validation[String, KafkaSource] = for {
-    kafkaConfig <- config.sourceSink match {
-      case c: Kafka => c.success
-      case _ => "Configured source/sink is not Kafka".failure
-    }
-    goodSink = new ThreadLocal[Sink] {
-      override def initialValue =
-        new KafkaSink(kafkaConfig, config.buffer, config.out.enriched, tracker)
-    }
-    badSink = new ThreadLocal[Sink] {
-      override def initialValue = new KafkaSink(kafkaConfig, config.buffer, config.out.bad, tracker)
-    }
-  } yield new KafkaSource(goodSink, badSink, igluResolver, enrichmentRegistry, tracker, config,
-    kafkaConfig.brokers)
+  ): Validation[String, KafkaSource] =
+    for {
+      kafkaConfig <- config.sourceSink match {
+        case c: Kafka => c.success
+        case _        => "Configured source/sink is not Kafka".failure
+      }
+      goodSink = new ThreadLocal[Sink] {
+        override def initialValue =
+          new KafkaSink(kafkaConfig, config.buffer, config.out.enriched, tracker)
+      }
+
+      piiSink = if (emitPii(enrichmentRegistry)) Some(new ThreadLocal[Sink] {
+        override def initialValue =
+          new KafkaSink(kafkaConfig, config.buffer, config.out.pii, tracker)
+      })
+      else None
+      badSink = new ThreadLocal[Sink] {
+        override def initialValue =
+          new KafkaSink(kafkaConfig, config.buffer, config.out.bad, tracker)
+      }
+    } yield
+      new KafkaSource(
+        goodSink,
+        piiSink,
+        badSink,
+        igluResolver,
+        enrichmentRegistry,
+        tracker,
+        config,
+        kafkaConfig.brokers)
 }
 /** Source to read events from a Kafka topic */
 class KafkaSource private (
   goodSink: ThreadLocal[Sink],
+  piiSink: Option[ThreadLocal[Sink]],
   badSink: ThreadLocal[Sink],
   igluResolver: Resolver,
   enrichmentRegistry: EnrichmentRegistry,
@@ -68,7 +86,7 @@ class KafkaSource private (
   config: StreamsConfig,
   brokers: String
 ) extends Source(
-  goodSink, badSink, igluResolver, enrichmentRegistry, tracker, config.out.partitionKey) {
+  goodSink, piiSink, badSink, igluResolver, enrichmentRegistry, tracker, config.out.partitionKey) {
 
   override val MaxRecordSize = None
 

@@ -32,6 +32,7 @@ import iglu.client.Resolver
 import model.{Stdin, StreamsConfig}
 import scalatracker.Tracker
 import sinks.{Sink, StderrSink, StdoutSink}
+import utils.emitPii
 
 /** StdinSource companion object with factory method */
 object StdinSource {
@@ -40,30 +41,43 @@ object StdinSource {
     igluResolver: Resolver,
     enrichmentRegistry: EnrichmentRegistry,
     tracker: Option[Tracker]
-  ): Validation[String, StdinSource] = for {
-    _ <- config.sourceSink match {
-      case Stdin => ().success
-      case _ => "Configured source/sink is not Stdin".failure
-    }
-    goodSink = new ThreadLocal[Sink] {
-      override def initialValue = new StdoutSink()
-    }
-    badSink = new ThreadLocal[Sink] {
-      override def initialValue = new StderrSink()
-    }
-  } yield new StdinSource(
-    goodSink, badSink, igluResolver, enrichmentRegistry, tracker, config.out.partitionKey)
+  ): Validation[String, StdinSource] =
+    for {
+      _ <- config.sourceSink match {
+        case Stdin => ().success
+        case _     => "Configured source/sink is not Stdin".failure
+      }
+      goodSink = new ThreadLocal[Sink] {
+        override def initialValue = new StdoutSink()
+      }
+      piiSink = if (emitPii(enrichmentRegistry)) Some(new ThreadLocal[Sink] {
+        override def initialValue = new StdoutSink()
+      })
+      else None
+      badSink = new ThreadLocal[Sink] {
+        override def initialValue = new StderrSink()
+      }
+    } yield
+      new StdinSource(
+        goodSink,
+        piiSink,
+        badSink,
+        igluResolver,
+        enrichmentRegistry,
+        tracker,
+        config.out.partitionKey)
 }
 
 /** Source to decode raw events (in base64) from stdin. */
 class StdinSource private (
   goodSink: ThreadLocal[Sink],
+  piiSink: Option[ThreadLocal[Sink]],
   badSink: ThreadLocal[Sink],
   igluResolver: Resolver,
   enrichmentRegistry: EnrichmentRegistry,
   tracker: Option[Tracker],
   partitionKey: String
-) extends Source(goodSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
+) extends Source(goodSink, piiSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
 
   override val MaxRecordSize = None
 

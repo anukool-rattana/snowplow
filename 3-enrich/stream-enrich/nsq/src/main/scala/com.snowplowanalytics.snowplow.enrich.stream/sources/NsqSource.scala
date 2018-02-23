@@ -33,6 +33,7 @@ import com.snowplowanalytics.client.nsq.exceptions.NSQException
 import scalaz._
 import Scalaz._
 
+import utils.emitPii
 import iglu.client.Resolver
 import common.enrichments.EnrichmentRegistry
 import model.{Nsq, StreamsConfig}
@@ -46,24 +47,39 @@ object NsqSource {
     igluResolver: Resolver,
     enrichmentRegistry: EnrichmentRegistry,
     tracker: Option[Tracker]
-  ): Validation[Throwable, NsqSource] = for {
-    nsqConfig <- config.sourceSink match {
-      case c: Nsq => c.success
-      case _ => new IllegalArgumentException("Configured source/sink is not Nsq").failure
-    }
-    goodSink = new ThreadLocal[Sink] {
-      override def initialValue = new NsqSink(nsqConfig, config.out.enriched)
-    }
-    badSink = new ThreadLocal[Sink] {
-      override def initialValue = new NsqSink(nsqConfig, config.out.bad)
-    }
-  } yield new NsqSource(goodSink, badSink, igluResolver, enrichmentRegistry, tracker, nsqConfig,
-    config.in.raw, config.out.partitionKey)
+  ): Validation[Throwable, NsqSource] =
+    for {
+      nsqConfig <- config.sourceSink match {
+        case c: Nsq => c.success
+        case _      => new IllegalArgumentException("Configured source/sink is not Nsq").failure
+      }
+      goodSink = new ThreadLocal[Sink] {
+        override def initialValue = new NsqSink(nsqConfig, config.out.enriched)
+      }
+      piiSink = if (emitPii(enrichmentRegistry)) Some(new ThreadLocal[Sink] {
+        override def initialValue = new NsqSink(nsqConfig, config.out.pii)
+      })
+      else None
+      badSink = new ThreadLocal[Sink] {
+        override def initialValue = new NsqSink(nsqConfig, config.out.bad)
+      }
+    } yield
+      new NsqSource(
+        goodSink,
+        piiSink,
+        badSink,
+        igluResolver,
+        enrichmentRegistry,
+        tracker,
+        nsqConfig,
+        config.in.raw,
+        config.out.partitionKey)
 }
 
 /** Source to read raw events from NSQ. */
 class NsqSource private (
   goodSink: ThreadLocal[sinks.Sink],
+  piiSink: Option[ThreadLocal[sinks.Sink]],
   badSink: ThreadLocal[sinks.Sink],
   igluResolver: Resolver,
   enrichmentRegistry: EnrichmentRegistry,
@@ -71,7 +87,7 @@ class NsqSource private (
   nsqConfig: Nsq,
   topicName: String,
   partitionKey: String
-) extends Source(goodSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
+) extends Source(goodSink, piiSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
 
   override val MaxRecordSize = None
 

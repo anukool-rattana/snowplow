@@ -50,28 +50,53 @@ object GooglePubSubSource {
     igluResolver: Resolver,
     enrichmentRegistry: EnrichmentRegistry,
     tracker: Option[Tracker]
-  ): Validation[Throwable, GooglePubSubSource] = for {
-    googlePubSubConfig <- config.sourceSink match {
-      case c: GooglePubSub => c.success
-      case _ => new IllegalArgumentException("Configured source/sink is not Google PubSub").failure
-    }
-    goodSink <- GooglePubSubSink
-      .createAndInitialize(googlePubSubConfig, config.buffer, config.out.enriched)
-      .validation
-    threadLocalGoodSink = new ThreadLocal[Sink] {
-      override def initialValue = goodSink
-    }
-    badSink <- GooglePubSubSink
-      .createAndInitialize(googlePubSubConfig, config.buffer, config.out.bad)
-      .validation
-    threadLocalBadSink = new ThreadLocal[Sink] {
-      override def initialValue = badSink
-    }
-    topic = ProjectTopicName.of(googlePubSubConfig.googleProjectId, config.in.raw)
-    subName = ProjectSubscriptionName.of(googlePubSubConfig.googleProjectId, config.appName)
-    _ <- toEither(createSubscriptionIfNotExist(subName, topic)).validation
-  } yield new GooglePubSubSource(threadLocalGoodSink, threadLocalBadSink, igluResolver,
-    enrichmentRegistry, tracker, subName, googlePubSubConfig.threadPoolSize, config.out.partitionKey)
+  ): Validation[Throwable, GooglePubSubSource] =
+    for {
+      googlePubSubConfig <- config.sourceSink match {
+        case c: GooglePubSub => c.success
+        case _ =>
+          new IllegalArgumentException("Configured source/sink is not Google PubSub").failure
+      }
+      goodSink <- GooglePubSubSink
+        .createAndInitialize(googlePubSubConfig, config.buffer, config.out.enriched)
+        .validation
+      threadLocalGoodSink = new ThreadLocal[Sink] {
+        override def initialValue = goodSink
+      }
+      piiSink <- if (emitPii(enrichmentRegistry))
+        GooglePubSubSink
+          .createAndInitialize(googlePubSubConfig, config.buffer, config.out.pii)
+          .validation
+      else
+        None.success
+      threadLocalPiiSink = piiSink match {
+        case g: GooglePubSubSink =>
+          Some(new ThreadLocal[Sink] {
+            override def initialValue = g
+          })
+        case _ => None
+      }
+      badSink <- GooglePubSubSink
+        .createAndInitialize(googlePubSubConfig, config.buffer, config.out.bad)
+        .validation
+      threadLocalBadSink = new ThreadLocal[Sink] {
+        override def initialValue = badSink
+      }
+      topic   = ProjectTopicName.of(googlePubSubConfig.googleProjectId, config.in.raw)
+      subName = ProjectSubscriptionName.of(googlePubSubConfig.googleProjectId, config.appName)
+      _ <- toEither(createSubscriptionIfNotExist(subName, topic)).validation
+    } yield
+      new GooglePubSubSource(
+        threadLocalGoodSink,
+        threadLocalPiiSink,
+        threadLocalBadSink,
+        igluResolver,
+        enrichmentRegistry,
+        tracker,
+        subName,
+        googlePubSubConfig.threadPoolSize,
+        config.out.partitionKey
+      )
 
   private def createSubscriptionIfNotExist(
     sub: ProjectSubscriptionName,
@@ -94,6 +119,7 @@ object GooglePubSubSource {
 /** Source to read events from a GCP Pub/Sub topic */
 class GooglePubSubSource private (
   goodSink: ThreadLocal[Sink],
+  piiSink: Option[ThreadLocal[Sink]],
   badSink: ThreadLocal[Sink],
   igluResolver: Resolver,
   enrichmentRegistry: EnrichmentRegistry,
@@ -101,7 +127,7 @@ class GooglePubSubSource private (
   subName: ProjectSubscriptionName,
   threadPoolSize: Int,
   partitionKey: String
-) extends Source(goodSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
+) extends Source(goodSink, piiSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
 
   override val MaxRecordSize = Some(10000000L)
 
