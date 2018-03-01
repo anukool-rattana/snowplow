@@ -141,3 +141,4 @@ object KafkaIntegrationSpecValues {
     ("testGoodIn", "testEnrichedGood", "testEnrichedBad", "testEnrichedUglyPii")
   val kafkaHost = "127.0.0.1:9092"
 }
+

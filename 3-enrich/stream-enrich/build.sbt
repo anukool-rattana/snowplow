@@ -51,7 +51,7 @@ lazy val allSettings = buildSettings ++
 
 lazy val root = project.in(file("."))
   .settings(buildSettings)
-  .aggregate(core, kinesis, pubsub, kafka, nsq, stdin)
+  .aggregate(core, kinesis, pubsub, kafka, nsq, stdin, integration)
 
 lazy val core = project
   .settings(moduleName := "snowplow-stream-enrich")
@@ -87,7 +87,9 @@ lazy val pubsub = project
 lazy val kafka = project
   .settings(moduleName := "snowplow-stream-enrich-kafka")
   .settings(allSettings)
-  .settings(libraryDependencies ++= Seq(Dependencies.Libraries.kafkaClients))
+  .settings(libraryDependencies ++= Seq(
+    Dependencies.Libraries.kafkaClients
+  ))
   .dependsOn(core)
 
 lazy val nsq = project
@@ -100,3 +102,15 @@ lazy val stdin = project
   .settings(moduleName := "snowplow-stream-enrich-stdin")
   .settings(allSettings)
   .dependsOn(core)
+
+lazy val integration = project.in(file("./integration"))
+  .settings(moduleName := "integration")
+  .settings(allSettings)
+  .settings(BuildSettings.addExampleConfToTestCp)
+  .settings(libraryDependencies ++= Seq(
+    Dependencies.Libraries.kafkaClients,
+        // Test
+    Dependencies.Libraries.embeddedKafka,
+    Dependencies.Libraries.jinJava
+  ))
+  .dependsOn(core % "test->test", kafka % "test->compile")
