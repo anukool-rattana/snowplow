@@ -130,27 +130,25 @@ class PiiEmitSpec extends Specification with FutureMatchers {
         case (good: List[String], bad: List[String], pii: List[String]) => {
           (bad aka "bad result list" must have size (expectedBad)) and
             (pii aka "pii result list" must have size (expectedPii)) and
-            // (good aka "good result list" must have size (expectedGood))
             (good aka "good result list" must have size (expectedGood)) and
             (good aka "good result list" must containMatch(
-
-          spaceJoinResult(PagePingWithContextSpec.expected))) and
-          (pii aka "pii result list" must containMatch(spaceJoinResult(PagePingWithContextSpec.pii))) and
-          (good aka "good result list" must containMatch(
-            spaceJoinResult(PageViewWithContextSpec.expected))) and
-          (pii aka "pii result list" must containMatch(spaceJoinResult(PageViewWithContextSpec.pii))) and
-          (good aka "good result list" must containMatch(
-            spaceJoinResult(StructEventSpec.expected))) and
-          (pii aka "pii result list" must containMatch(spaceJoinResult(StructEventSpec.pii))) and
-          (good aka "good result list" must containMatch(
-            spaceJoinResult(StructEventWithContextSpec.expected))) and
-          (pii aka "pii result list" must containMatch(spaceJoinResult(StructEventWithContextSpec.pii))) and
-          (good aka "good result list" must containMatch(
-            spaceJoinResult(TransactionItemSpec.expected))) and
-          (pii aka "pii result list" must containMatch(spaceJoinResult(TransactionItemSpec.pii))) and
-          (good aka "good result list" must containMatch(
-            spaceJoinResult(TransactionSpec.expected))) and
-          (pii aka "pii result list" must containMatch(spaceJoinResult(TransactionSpec.pii)))
+              spaceJoinResult(PagePingWithContextSpec.expected))) and
+            (pii aka "pii result list" must containMatch(spaceJoinResult(PagePingWithContextSpec.pii))) and
+            (good aka "good result list" must containMatch(
+              spaceJoinResult(PageViewWithContextSpec.expected))) and
+            (pii aka "pii result list" must containMatch(spaceJoinResult(PageViewWithContextSpec.pii))) and
+            (good aka "good result list" must containMatch(
+              spaceJoinResult(StructEventSpec.expected))) and
+            (pii aka "pii result list" must containMatch(spaceJoinResult(StructEventSpec.pii))) and
+            (good aka "good result list" must containMatch(
+              spaceJoinResult(StructEventWithContextSpec.expected))) and
+            (pii aka "pii result list" must containMatch(spaceJoinResult(StructEventWithContextSpec.pii))) and
+            (good aka "good result list" must containMatch(
+              spaceJoinResult(TransactionItemSpec.expected))) and
+            (pii aka "pii result list" must containMatch(spaceJoinResult(TransactionItemSpec.pii))) and
+            (good aka "good result list" must containMatch(
+              spaceJoinResult(TransactionSpec.expected))) and
+            (pii aka "pii result list" must containMatch(spaceJoinResult(TransactionSpec.pii)))
         }
       }
       allResults must expectedMatcher.await(

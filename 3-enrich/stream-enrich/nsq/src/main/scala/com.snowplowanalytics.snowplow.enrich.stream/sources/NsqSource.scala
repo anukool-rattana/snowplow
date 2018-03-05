@@ -1,21 +1,21 @@
 /*
-* Copyright (c) 2013-2018 Snowplow Analytics Ltd.
-* All rights reserved.
-*
-* This program is licensed to you under the Apache License Version 2.0,
-* and you may not use this file except in compliance with the Apache
-* License Version 2.0.
-* You may obtain a copy of the Apache License Version 2.0 at
-* http://www.apache.org/licenses/LICENSE-2.0.
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the Apache License Version 2.0 is distributed
-* on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-* either express or implied.
-*
-* See the Apache License Version 2.0 for the specific language
-* governing permissions and limitations there under.
-*/
+ * Copyright (c) 2013-2018 Snowplow Analytics Ltd.
+ * All rights reserved.
+ *
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache
+ * License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at
+ * http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied.
+ *
+ * See the Apache License Version 2.0 for the specific language
+ * governing permissions and limitations there under.
+ */
 
 package com.snowplowanalytics
 package snowplow
@@ -87,7 +87,14 @@ class NsqSource private (
   nsqConfig: Nsq,
   topicName: String,
   partitionKey: String
-) extends Source(goodSink, piiSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
+) extends Source(
+      goodSink,
+      piiSink,
+      badSink,
+      igluResolver,
+      enrichmentRegistry,
+      tracker,
+      partitionKey) {
 
   override val MaxRecordSize = None
 
@@ -98,7 +105,7 @@ class NsqSource private (
       override def message(msg: NSQMessage): Unit = {
         val bytes = msg.getMessage()
         enrichAndStoreEvents(List(bytes)) match {
-          case true => msg.finished()
+          case true  => msg.finished()
           case false => log.error(s"Error while enriching the event")
         }
       }
@@ -113,7 +120,12 @@ class NsqSource private (
     val lookup = new DefaultNSQLookup
     lookup.addLookupAddress(nsqConfig.lookupHost, nsqConfig.lookupPort)
     val consumer = new NSQConsumer(
-      lookup, topicName, nsqConfig.rawChannel, nsqCallback, new NSQConfig(),  errorCallback)
+      lookup,
+      topicName,
+      nsqConfig.rawChannel,
+      nsqCallback,
+      new NSQConfig(),
+      errorCallback)
     consumer.start()
   }
 }

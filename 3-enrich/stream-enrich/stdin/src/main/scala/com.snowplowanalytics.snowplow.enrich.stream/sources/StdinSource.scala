@@ -1,4 +1,4 @@
- /*
+/*
  * Copyright (c) 2013-2018 Snowplow Analytics Ltd.
  * All rights reserved.
  *
@@ -77,7 +77,14 @@ class StdinSource private (
   enrichmentRegistry: EnrichmentRegistry,
   tracker: Option[Tracker],
   partitionKey: String
-) extends Source(goodSink, piiSink, badSink, igluResolver, enrichmentRegistry, tracker, partitionKey) {
+) extends Source(
+      goodSink,
+      piiSink,
+      badSink,
+      igluResolver,
+      enrichmentRegistry,
+      tracker,
+      partitionKey) {
 
   override val MaxRecordSize = None
 
