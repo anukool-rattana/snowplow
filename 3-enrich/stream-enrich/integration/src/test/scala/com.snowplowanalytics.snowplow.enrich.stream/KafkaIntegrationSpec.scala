@@ -33,7 +33,6 @@ import java.util.Properties
 // Scala libraries
 import org.apache.kafka.clients.consumer.{ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.clients.producer.ProducerConfig
 import io.bfil.kafka.specs2.DefaultKafkaPorts
 import io.bfil.kafka.specs2.EmbeddedKafkaContext
 
