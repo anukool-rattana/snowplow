@@ -494,10 +494,24 @@ object EnrichmentManager {
       case None => None.success
     }
 
+    // Fetch IAB enrichment context
+    val iabContext = registry.getIabEnrichment match {
+      case Some(iab) => {
+        iab
+          .getIabContext(Option(event.useragent),
+                         Option(event.user_ipaddress),
+                         Option(event.derived_tstamp).map(EventEnrichments.fromTimestamp))
+          .map(_.some)
+      }
+      case None => None.success
+    }
+
     // Assemble array of contexts prepared by built-in enrichments
     val preparedDerivedContexts = List(uaParser).collect {
       case Success(Some(context)) => context
     } ++ List(weatherContext).collect {
+      case Success(Some(context)) => context
+    } ++ List(iabContext).collect {
       case Success(Some(context)) => context
     } ++ jsScript.getOrElse(Nil) ++ cookieExtractorContext ++ httpHeaderExtractorContext
 
@@ -539,7 +553,7 @@ object EnrichmentManager {
     }
 
     // Collect our errors on Failure, or return our event on Success
-    // Broken into two parts due to 12 argument limit on |@|
+    // Broken into three parts due to 12 argument limit on |@|
     val first =
       (useragent.toValidationNel |@|
         collectorTstamp.toValidationNel |@|
@@ -565,14 +579,20 @@ object EnrichmentManager {
         unstructEvent |@|
         apiRequestContexts |@|
         sqlQueryContexts |@|
-        extractSchema.toValidationNel |@|
-        weatherContext.toValidationNel) { (_, _, _, _, _, _, _, _, _, _, _, _) =>
+        extractSchema.toValidationNel) { (_, _, _, _, _, _, _, _, _, _, _) =>
         ()
       }
+
+    val third =
+      (weatherContext.toValidationNel |@|
+        iabContext.toValidationNel) { (_, _) =>
+        ()
+      }
+
     //This needs to happen last
     val last = piiTransform
 
-    (first |@| second |@| last) { (_, _, _) =>
+    (first |@| second |@| third |@| last) { (_, _, _, _) =>
       event
 
     }
